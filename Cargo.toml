@@ -1,0 +1,12 @@
+
+[package]
+name = "wallmint"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gtk4 = { version = "0.10", package = "gtk4" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "5.0"
+gtk4-layer-shell = "0.7"

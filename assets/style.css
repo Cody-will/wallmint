@@ -1,0 +1,11 @@
+.preview-container {
+  border-bottom: 2px solid @accent;
+  border-radius: 12px;
+}
+
+window {
+  background: alpha(@background, var(--bg-opacity));
+  border: 4px solid @accent;
+  border-radius: 18px;
+  color: @accent; 
+}
