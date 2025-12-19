@@ -1,6 +1,6 @@
 .preview-container {
   border-bottom: 2px solid @accent;
-  border-radius: 12px;
+  padding: 4px;
 }
 
 window {
@@ -8,4 +8,20 @@ window {
   border: 4px solid @accent;
   border-radius: 18px;
   color: @accent; 
+}
+
+.preview {
+  border: 2px solid @accent;
+  border-radius: 12px;
+  margin: 16px 16px 16px 16px;
+}
+
+.thumb-row {
+  margin: 16px 16px 16px 16px;
+}
+
+.thumb {
+  border: 2px solid @accent;
+  border-radius: 12px;
+  
 }

@@ -1,8 +1,8 @@
-use gtk4 as gtk;
+use gtk;
 use gtk::prelude::*;
 use gtk4_layer_shell::LayerShell;
 use crate::carousel::create_carousel;
-use crate::carousel::load_images_from_folder;
+use crate::keys::register_carousel_keys;
 
 pub fn build_ui(app: &gtk::Application, theme: &crate::config::WallmintTheme) {
     let window = gtk::ApplicationWindow::builder()
@@ -33,10 +33,11 @@ pub fn build_ui(app: &gtk::Application, theme: &crate::config::WallmintTheme) {
     root.append(&photo_box);
     window.set_child(Some(&root));
 
-    let img = load_images_from_folder("/home/cody/Pictures/walls");
-    let carousel = create_carousel(img);
+    let img = crate::carousel::load_images_from_folder("/home/cody/Pictures/walls");
+    let (carousel_widget, carousel_handle) = create_carousel(img);
 
-    root.append(&carousel);
+    window.set_child(Some(&carousel_widget));
+    register_carousel_keys(app, &window, carousel_handle);
     
 
     window.present();

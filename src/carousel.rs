@@ -1,10 +1,8 @@
 
-use gtk4 as gtk;
+use gtk;
 use gtk::prelude::*;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{cell::RefCell, path::Path, fs, path::PathBuf, rc::Rc};
+use std::process::Command;
 
 fn is_image(path: &Path) -> bool {
     matches!(
@@ -31,35 +29,147 @@ pub fn load_images_from_folder(folder: impl AsRef<Path>) -> Vec<PathBuf> {
     out
 }
 
-pub fn create_carousel(image_paths: Vec<PathBuf>) -> gtk::Widget {
-    let strip = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    strip.add_css_class("carousel-container");
-    strip.set_hexpand(true);
-    strip.set_vexpand(false);
+pub type CarouselHandle = Rc<RefCell<Carousel>>;
 
-    for path in image_paths {
-        let pic = gtk::Picture::new();
-        pic.set_size_request(160, 90);
-        pic.add_css_class("thumb");
+pub struct Carousel {
+    all: Vec<gtk::gdk::Texture>,
+    selected: usize,
+    thumbs: [gtk::Picture; 5],
+    preview: gtk::Picture,
+    selected_path: PathBuf,
+    all_path: Vec<PathBuf>,
+}
 
-        let file = gtk::gio::File::for_path(&path);
-        match gtk::gdk::Texture::from_file(&file) {
-            Ok(tex) => pic.set_paintable(Some(&tex)),
-            Err(_) => pic.set_paintable(None::<&gtk::gdk::Paintable>),
-        }
+impl Carousel {
+    fn len(&self) -> usize { self.all.len() }
 
-        strip.append(&pic);
+    pub fn prev(&mut self) {
+        if self.len() == 0 { return; }
+        self.selected = (self.selected + self.len() - 1) % self.len();
+        self.refresh();
     }
 
-    let scroller = gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Automatic)
-        .vscrollbar_policy(gtk::PolicyType::Never)
-        .child(&strip)
-        .build();
+    pub fn next(&mut self) {
+        if self.len() == 0 { return; }
+        self.selected = (self.selected + 1) % self.len();
+        self.refresh();
+    }
 
-    scroller.set_propagate_natural_width(true);
-    scroller.set_propagate_natural_height(true);
+    fn visible_indices(&self) -> [usize; 5] {
+        let n = self.len().max(1);
+        let s = self.selected % n;
+        [
+            (s + n - 2) % n,
+            (s + n - 1) % n,
+            s,
+            (s + 1) % n,
+            (s + 2) % n,
+        ]
+    }
 
-    scroller.upcast::<gtk::Widget>()
+    fn set_selected_path(&mut self) {
+        self.selected_path = self.all_path[self.selected].clone();
+        println!("path: {}", self.selected_path.display());
+    }
+
+    fn refresh(&mut self) {
+        if self.len() == 0 { return; }
+
+        let idx = self.visible_indices();
+
+        for (slot, &i) in self.thumbs.iter().zip(idx.iter()) {
+            slot.set_paintable(Some(&self.all[i]));
+        }
+        self.set_selected_path();
+
+        self.preview.set_paintable(Some(&self.all[self.selected]));
+    }
+
+    pub fn set_paper(&self) {
+        let path = std::fs::canonicalize(&self.selected_path)
+            .unwrap_or_else(|_| self.selected_path.clone());
+        let path_str = path.to_string_lossy().to_string(); 
+        let wallpaper = format!("eDP-1,{}", path_str);
+        println!("{}", &path_str); 
+        let preload = Command::new("hyprctl")
+            .args(["hyprpaper", "preload", &path_str])
+            .output()
+            .expect("failed to execute process");
+
+        eprintln!("preload stdout: {}", String::from_utf8_lossy(&preload.stdout));
+        eprintln!("preload strerr: {}", String::from_utf8_lossy(&preload.stderr));
+
+        let set = Command::new("hyprctl")
+            .args(["hyprpaper", "wallpaper", &wallpaper])
+            .output()
+            .expect("failed to execute process");
+
+        eprintln!("set stdout: {}", String::from_utf8_lossy(&set.stdout));
+        eprintln!("set stderr: {}", String::from_utf8_lossy(&set.stderr));
+
+        let colors = Command::new("wallust")
+            .args(["run", &path_str])
+            .output()
+            .expect("Color change failed");
+
+        eprintln!("colors: stdout: {}", String::from_utf8_lossy(&colors.stdout));
+        eprintln!("colors: stderr: {}", String::from_utf8_lossy(&colors.stderr));
+    }
+}
+
+pub fn create_carousel(image_paths: Vec<PathBuf>) -> (gtk::Widget, CarouselHandle) {
+    let mut all = Vec::new();
+    let mut all_path = Vec::new();
+    
+    for path in image_paths {
+        all_path.push(path.clone());
+        let file = gtk::gio::File::for_path(&path);
+        if let Ok(tex) = gtk::gdk::Texture::from_file(&file) {
+            all.push(tex);
+        }
+    }
+
+    // 2) Build widgets
+    let preview = gtk::Picture::new();
+    preview.set_can_shrink(true);
+    preview.set_content_fit(gtk::ContentFit::Cover);
+    preview.set_vexpand(true);
+    preview.set_hexpand(true);
+    preview.add_css_class("preview");
+
+    let thumb_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    thumb_row.add_css_class("thumb-row");
+    thumb_row.set_hexpand(true);
+
+    let thumbs: [gtk::Picture; 5] = std::array::from_fn(|_| {
+        let p = gtk::Picture::new();
+        p.set_size_request(160, 90);
+        p.set_content_fit(gtk::ContentFit::Cover);
+        p.set_vexpand(true);
+        p.set_hexpand(true);
+        p.set_can_shrink(true);
+        p.add_css_class("thumb");
+        thumb_row.append(&p);
+        p
+    });
+
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    root.append(&preview);
+    root.append(&thumb_row);
+    let selected_path = all_path[0].clone();
+
+    // 3) Create state + initial render
+    let carousel = Rc::new(RefCell::new(Carousel {
+        all,
+        selected: 0,
+        thumbs,
+        preview,
+        all_path,
+        selected_path,
+    }));
+
+    carousel.borrow_mut().refresh();
+
+    (root.upcast::<gtk::Widget>(), carousel)
 }
 

@@ -14,6 +14,13 @@ pub struct WallmintColors {
     pub color5: String,
     pub color6: String,
     pub color7: String,
+    pub color8: String,
+    pub color9: String,
+    pub color10: String,
+    pub color11: String,
+    pub color12: String,
+    pub color13: String,
+    pub color14: String,
 }
 
 #[derive(Debug, Deserialize)]

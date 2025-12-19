@@ -19,7 +19,7 @@ pub fn load_theme() -> WallmintTheme {
     WallmintTheme {
         background: cols.background,
         foreground: cols.foreground,
-        accent: cols.color4,
+        accent: cols.color13,
         background_alpha: opacity,
     }
 }
