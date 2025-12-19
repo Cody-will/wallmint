@@ -3,6 +3,8 @@ use gtk;
 use gtk::prelude::*;
 use std::{cell::RefCell, path::Path, fs, path::PathBuf, rc::Rc};
 use std::process::Command;
+use crate::app::load_css;
+use crate::config::load_theme;
 
 fn is_image(path: &Path) -> bool {
     matches!(
@@ -114,6 +116,9 @@ impl Carousel {
 
         eprintln!("colors: stdout: {}", String::from_utf8_lossy(&colors.stdout));
         eprintln!("colors: stderr: {}", String::from_utf8_lossy(&colors.stderr));
+            
+        let theme = load_theme();
+        load_css(&theme);
     }
 }
 
@@ -141,14 +146,18 @@ pub fn create_carousel(image_paths: Vec<PathBuf>) -> (gtk::Widget, CarouselHandl
     thumb_row.add_css_class("thumb-row");
     thumb_row.set_hexpand(true);
 
-    let thumbs: [gtk::Picture; 5] = std::array::from_fn(|_| {
+    let thumbs: [gtk::Picture; 5] = std::array::from_fn(|i| {
         let p = gtk::Picture::new();
         p.set_size_request(160, 90);
         p.set_content_fit(gtk::ContentFit::Cover);
         p.set_vexpand(true);
         p.set_hexpand(true);
         p.set_can_shrink(true);
-        p.add_css_class("thumb");
+        if (i == 2) {
+            p.add_css_class("thumb-active");
+        } else {
+            p.add_css_class("thumb");
+        }
         thumb_row.append(&p);
         p
     });

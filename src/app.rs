@@ -27,7 +27,7 @@ pub fn run() {
 }
 
 
-fn load_css(theme: &crate::config::WallmintTheme) {
+pub fn load_css(theme: &crate::config::WallmintTheme) {
     let display = Display::default().expect("No display found");
 
     let base = gtk::CssProvider::new();
@@ -39,12 +39,12 @@ fn load_css(theme: &crate::config::WallmintTheme) {
     );
 
     let generated = gtk::CssProvider::new();
-    println!("alpha: {}", theme.background_alpha);
     let vars = format!(
         r#"
         @define-color background {};
         @define-color foreground {};
         @define-color accent {};
+        @define-color secondary {};
 
          :root {{
             --bg-opacity: {};
@@ -53,6 +53,7 @@ fn load_css(theme: &crate::config::WallmintTheme) {
         theme.background,
         theme.foreground,
         theme.accent,
+        theme.secondary,
         theme.background_alpha,
     );
 

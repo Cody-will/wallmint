@@ -7,6 +7,7 @@ pub struct WallmintTheme {
     pub background: String,
     pub foreground: String,
     pub accent: String,
+    pub secondary: String,
     pub background_alpha: f32,
 }
 
@@ -20,6 +21,7 @@ pub fn load_theme() -> WallmintTheme {
         background: cols.background,
         foreground: cols.foreground,
         accent: cols.color13,
+        secondary: cols.color12,
         background_alpha: opacity,
     }
 }
