@@ -153,7 +153,7 @@ pub fn create_carousel(image_paths: Vec<PathBuf>) -> (gtk::Widget, CarouselHandl
         p.set_vexpand(true);
         p.set_hexpand(true);
         p.set_can_shrink(true);
-        if (i == 2) {
+        if i == 2 {
             p.add_css_class("thumb-active");
         } else {
             p.add_css_class("thumb");

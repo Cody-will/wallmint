@@ -31,7 +31,8 @@ pub fn load_css(theme: &crate::config::WallmintTheme) {
     let display = Display::default().expect("No display found");
 
     let base = gtk::CssProvider::new();
-    base.load_from_path("assets/style.css");
+    let path = include_str!("../assets/style.css");
+    base.load_from_data(path);
     gtk::style_context_add_provider_for_display(
         &display,
         &base,

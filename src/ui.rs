@@ -4,7 +4,7 @@ use gtk4_layer_shell::LayerShell;
 use crate::carousel::create_carousel;
 use crate::keys::register_carousel_keys;
 
-pub fn build_ui(app: &gtk::Application, theme: &crate::config::WallmintTheme) {
+pub fn build_ui(app: &gtk::Application, _theme: &crate::config::WallmintTheme) {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("Wallmint")
