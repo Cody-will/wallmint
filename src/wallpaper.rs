@@ -27,8 +27,7 @@ fn set_hyprpaper(path_str: &str, cfg: &AppConfig) -> Result<(), String> {
         _ => "cover",
     };
 
-    // New hyprpaper dropped `preload`. Only try it when the user asked;
-    // ignore "invalid hyprpaper request" so the set still happens.
+    // New hyprpaper dropped `preload`. Ignore failures so the set still happens.
     if cfg.hyprpaper.preload {
         let _ = run_logged(
             bin,
@@ -38,11 +37,11 @@ fn set_hyprpaper(path_str: &str, cfg: &AppConfig) -> Result<(), String> {
     }
 
     let monitors = resolve_monitors(&cfg.hyprpaper.monitor, bin);
+    let mut ok = 0usize;
     let mut last_err = None;
 
     for mon in monitors {
         // Current IPC: hyprctl hyprpaper wallpaper "MON,/abs/path,fit"
-        // Empty MON is the fallback wallpaper.
         let arg = if mon.is_empty() {
             format!(",{path_str},{fit}")
         } else {
@@ -50,12 +49,16 @@ fn set_hyprpaper(path_str: &str, cfg: &AppConfig) -> Result<(), String> {
         };
 
         match run_logged(bin, &["hyprpaper", "wallpaper", &arg], "hyprpaper wallpaper") {
-            Ok(()) => return Ok(()),
+            Ok(()) => ok += 1,
             Err(e) => last_err = Some(e),
         }
     }
 
-    Err(last_err.unwrap_or_else(|| "hyprpaper wallpaper failed".into()))
+    if ok > 0 {
+        Ok(())
+    } else {
+        Err(last_err.unwrap_or_else(|| "hyprpaper wallpaper failed".into()))
+    }
 }
 
 fn resolve_monitors(configured: &str, hyprctl: &str) -> Vec<String> {
@@ -68,10 +71,9 @@ fn resolve_monitors(configured: &str, hyprctl: &str) -> Vec<String> {
     }
 
     let mut names = list_hypr_monitors(hyprctl);
-    // Also try the empty-monitor fallback used by new hyprpaper.
     names.push(String::new());
-    if names.is_empty() {
-        names.push(String::new());
+    if names.len() == 1 {
+        // only fallback
     }
     names
 }
