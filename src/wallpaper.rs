@@ -1,4 +1,5 @@
 use crate::config::AppConfig;
+use serde_json::Value;
 use std::path::Path;
 use std::process::Command;
 
@@ -20,28 +21,76 @@ pub fn apply(path: &Path, cfg: &AppConfig) -> Result<(), String> {
 
 fn set_hyprpaper(path_str: &str, cfg: &AppConfig) -> Result<(), String> {
     let bin = cfg.hyprpaper.hyprctl_bin.as_str();
-    let monitor = if cfg.hyprpaper.monitor.trim().is_empty() {
-        "*"
-    } else {
-        cfg.hyprpaper.monitor.as_str()
+    let fit = match cfg.ui.preview.content_fit.to_ascii_lowercase().as_str() {
+        "contain" => "contain",
+        "fill" => "fill",
+        _ => "cover",
     };
 
+    // New hyprpaper dropped `preload`. Only try it when the user asked;
+    // ignore "invalid hyprpaper request" so the set still happens.
     if cfg.hyprpaper.preload {
-        run_logged(
+        let _ = run_logged(
             bin,
             &["hyprpaper", "preload", path_str],
             "hyprpaper preload",
-        )?;
+        );
     }
 
-    let wallpaper_arg = format!("{monitor},{path_str}");
-    run_logged(
-        bin,
-        &["hyprpaper", "wallpaper", &wallpaper_arg],
-        "hyprpaper wallpaper",
-    )?;
+    let monitors = resolve_monitors(&cfg.hyprpaper.monitor, bin);
+    let mut last_err = None;
 
-    Ok(())
+    for mon in monitors {
+        // Current IPC: hyprctl hyprpaper wallpaper "MON,/abs/path,fit"
+        // Empty MON is the fallback wallpaper.
+        let arg = if mon.is_empty() {
+            format!(",{path_str},{fit}")
+        } else {
+            format!("{mon},{path_str},{fit}")
+        };
+
+        match run_logged(bin, &["hyprpaper", "wallpaper", &arg], "hyprpaper wallpaper") {
+            Ok(()) => return Ok(()),
+            Err(e) => last_err = Some(e),
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| "hyprpaper wallpaper failed".into()))
+}
+
+fn resolve_monitors(configured: &str, hyprctl: &str) -> Vec<String> {
+    let configured = configured.trim();
+    if configured.is_empty() {
+        return vec![String::new()];
+    }
+    if configured != "*" {
+        return vec![configured.to_string()];
+    }
+
+    let mut names = list_hypr_monitors(hyprctl);
+    // Also try the empty-monitor fallback used by new hyprpaper.
+    names.push(String::new());
+    if names.is_empty() {
+        names.push(String::new());
+    }
+    names
+}
+
+fn list_hypr_monitors(hyprctl: &str) -> Vec<String> {
+    let output = Command::new(hyprctl).args(["-j", "monitors"]).output().ok();
+    let Some(output) = output else {
+        return Vec::new();
+    };
+    let Ok(v) = serde_json::from_slice::<Value>(&output.stdout) else {
+        return Vec::new();
+    };
+    v.as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn run_wallust(path_str: &str, cfg: &AppConfig) -> Result<(), String> {
@@ -63,8 +112,9 @@ fn run_logged(bin: &str, args: &[&str], label: &str) -> Result<(), String> {
     }
     if !output.status.success() {
         return Err(format!(
-            "{label} exited with {}",
-            output.status.code().unwrap_or(-1)
+            "{label} exited with {}: {}",
+            output.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&output.stdout).trim()
         ));
     }
     Ok(())
