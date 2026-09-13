@@ -1,67 +1,33 @@
-
 {
   "paths": {
     "wallpaper_dir": "~/Pictures/walls",
     "config_dir": "~/.config/wallmint",
     "style_path": "~/.config/wallmint/style.css",
     "config_path": "~/.config/wallmint/config.json",
-    "wallust_colors_json": "~/.cache/wallust/wallmint.json"
+    "wallust_colors_json": "~/.cache/wallust/colors.json"
   },
-
   "ui": {
     "title": "Wallmint",
     "window": {
       "width": 1100,
-      "height": 750,
+      "height": 720,
       "resizable": true
     },
-
     "preview": {
       "aspect_ratio": "16:9",
       "content_fit": "cover",
       "vexpand": true,
       "hexpand": true
-    },
-
-    "thumbnails": {
-      "count": 5,
-      "width": 160,
-      "height": 90,
-      "spacing": 8,
-      "content_fit": "cover"
     }
   },
-
-  "keybinds": {
-    "prev": ["Left", "h"],
-    "next": ["Right", "l"],
-    "set_wallpaper": ["s"]
-  },
-
   "hyprpaper": {
     "enabled": true,
     "hyprctl_bin": "hyprctl",
     "monitor": "*",
-    "preload": true,
-    "unload_all_before_set": false
+    "preload": true
   },
-
   "wallust": {
     "enabled": true,
-    "bin": "wallust",
-    "args": ["run", "{path}"],
-    "run_after_wallpaper_change": true
-  },
-
-  "install": {
-    "copy_defaults_if_missing": true,
-    "overwrite_existing": false
-  },
-
-  "logging": {
-    "print_commands": true,
-    "print_stdout": true,
-    "print_stderr": true
+    "bin": "wallust"
   }
 }
-

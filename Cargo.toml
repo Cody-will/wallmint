@@ -1,8 +1,8 @@
-
 [package]
 name = "wallmint"
 version = "0.1.0"
 edition = "2021"
+description = "GTK4 wallpaper picker for Hyprland with hyprpaper and wallust"
 
 [dependencies]
 gtk = { package = "gtk4", version = "0.10.3", features = ["v4_8", "v4_10"] }
