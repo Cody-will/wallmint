@@ -1,24 +1,30 @@
-
-use gtk;
+use crate::config::AppConfig;
 use gtk::prelude::*;
-use std::{cell::RefCell, path::Path, fs, path::PathBuf, rc::Rc};
-use std::process::Command;
-use crate::app::load_css;
-use crate::theme::load_theme;
+use std::sync::Arc;
+use std::{
+    cell::RefCell,
+    fs,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 fn is_image(path: &Path) -> bool {
-    return matches!(
+    matches!(
         path.extension()
             .and_then(|e| e.to_str())
             .map(|s| s.to_ascii_lowercase())
             .as_deref(),
-        Some("png") | Some("jpg") | Some("jpeg") | Some("webp") | Some("bmp")
-    );
+        Some("png") | Some("jpg") | Some("jpeg") | Some("webp") | Some("bmp") | Some("jxl")
+    )
 }
 
 pub fn load_images_from_folder(folder: impl AsRef<Path>) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    let Ok(read) = fs::read_dir(folder) else { return out; };
+    let folder = folder.as_ref();
+    let Ok(read) = fs::read_dir(folder) else {
+        eprintln!("Could not read wallpaper dir: {}", folder.display());
+        return out;
+    };
 
     for entry in read.flatten() {
         let path = entry.path();
@@ -40,19 +46,26 @@ pub struct Carousel {
     preview: gtk::Picture,
     selected_path: PathBuf,
     all_path: Vec<PathBuf>,
+    cfg: Arc<AppConfig>,
 }
 
 impl Carousel {
-    fn len(&self) -> usize { self.all.len() }
+    fn len(&self) -> usize {
+        self.all.len()
+    }
 
     pub fn prev(&mut self) {
-        if self.len() == 0 { return; }
+        if self.len() == 0 {
+            return;
+        }
         self.selected = (self.selected + self.len() - 1) % self.len();
         self.refresh();
     }
 
     pub fn next(&mut self) {
-        if self.len() == 0 { return; }
+        if self.len() == 0 {
+            return;
+        }
         self.selected = (self.selected + 1) % self.len();
         self.refresh();
     }
@@ -70,12 +83,17 @@ impl Carousel {
     }
 
     fn set_selected_path(&mut self) {
+        if self.all_path.is_empty() {
+            return;
+        }
         self.selected_path = self.all_path[self.selected].clone();
         println!("path: {}", self.selected_path.display());
     }
 
     fn refresh(&mut self) {
-        if self.len() == 0 { return; }
+        if self.len() == 0 {
+            return;
+        }
 
         let idx = self.visible_indices();
 
@@ -83,70 +101,47 @@ impl Carousel {
             slot.set_paintable(Some(&self.all[i]));
         }
         self.set_selected_path();
-
         self.preview.set_paintable(Some(&self.all[self.selected]));
     }
 
- 
-
     pub fn set_paper(&self) {
-        let path = std::fs::canonicalize(&self.selected_path)
-            .unwrap_or_else(|_| self.selected_path.clone());
-        let path_str = path.to_string_lossy(); 
-        let wallpaper_arg = format!("wallpaper,eDP-1,{}", path_str);
-        let preload_arg = format!("preload,{}", path_str);
+        if self.all_path.is_empty() {
+            eprintln!("No wallpapers loaded; nothing to set");
+            return;
+        }
 
-        println!("{}", path_str); 
-
-        // Send single comma-separated argument for preload
-        let preload = Command::new("hyprctl")
-            .args(["hyprpaper", &preload_arg])
-            .output()
-            .expect("failed to execute process");
-
-        eprintln!("preload stdout: {}", String::from_utf8_lossy(&preload.stdout));
-        eprintln!("preload stderr: {}", String::from_utf8_lossy(&preload.stderr));
-
-        // Send single comma-separated argument for wallpaper
-        let set = Command::new("hyprctl")
-            .args(["hyprpaper", &wallpaper_arg])
-            .output()
-            .expect("failed to execute process");
-
-        eprintln!("set stdout: {}", String::from_utf8_lossy(&set.stdout));
-        eprintln!("set stderr: {}", String::from_utf8_lossy(&set.stderr));
-
-        let colors = Command::new("wallust")
-            .args(["run", &path_str])
-            .output()
-            .expect("Color change failed");
-
-        eprintln!("colors: stdout: {}", String::from_utf8_lossy(&colors.stdout));
-        eprintln!("colors: stderr: {}", String::from_utf8_lossy(&colors.stderr));
-            
-        let theme = load_theme(&self);
-        load_css(&theme);
+        match crate::wallpaper::apply(&self.selected_path, &self.cfg) {
+            Ok(()) => {
+                crate::app::reload_theme_css(&self.cfg);
+            }
+            Err(e) => eprintln!("Failed to set wallpaper: {e}"),
+        }
     }
 }
 
-pub fn create_carousel(image_paths: Vec<PathBuf>) -> (gtk::Widget, CarouselHandle) {
+pub fn create_carousel(
+    image_paths: Vec<PathBuf>,
+    cfg: Arc<AppConfig>,
+) -> (gtk::Widget, CarouselHandle) {
     let mut all = Vec::new();
     let mut all_path = Vec::new();
-    
+
     for path in image_paths {
-        all_path.push(path.clone());
         let file = gtk::gio::File::for_path(&path);
-        if let Ok(tex) = gtk::gdk::Texture::from_file(&file) {
-            all.push(tex);
+        match gtk::gdk::Texture::from_file(&file) {
+            Ok(tex) => {
+                all_path.push(path);
+                all.push(tex);
+            }
+            Err(e) => eprintln!("Skipping {}: {e}", path.display()),
         }
     }
 
-    // 2) Build widgets
     let preview = gtk::Picture::new();
     preview.set_can_shrink(true);
-    preview.set_content_fit(gtk::ContentFit::Cover);
-    preview.set_vexpand(true);
-    preview.set_hexpand(true);
+    preview.set_content_fit(parse_content_fit(&cfg.ui.preview.content_fit));
+    preview.set_vexpand(cfg.ui.preview.vexpand);
+    preview.set_hexpand(cfg.ui.preview.hexpand);
     preview.add_css_class("preview");
 
     let thumb_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -172,9 +167,9 @@ pub fn create_carousel(image_paths: Vec<PathBuf>) -> (gtk::Widget, CarouselHandl
     let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
     root.append(&preview);
     root.append(&thumb_row);
-    let selected_path = all_path[0].clone();
 
-    // 3) Create state + initial render
+    let selected_path = all_path.first().cloned().unwrap_or_default();
+
     let carousel = Rc::new(RefCell::new(Carousel {
         all,
         selected: 0,
@@ -182,6 +177,7 @@ pub fn create_carousel(image_paths: Vec<PathBuf>) -> (gtk::Widget, CarouselHandl
         preview,
         all_path,
         selected_path,
+        cfg,
     }));
 
     carousel.borrow_mut().refresh();
@@ -189,3 +185,11 @@ pub fn create_carousel(image_paths: Vec<PathBuf>) -> (gtk::Widget, CarouselHandl
     (root.upcast::<gtk::Widget>(), carousel)
 }
 
+fn parse_content_fit(s: &str) -> gtk::ContentFit {
+    match s.to_ascii_lowercase().as_str() {
+        "contain" => gtk::ContentFit::Contain,
+        "fill" => gtk::ContentFit::Fill,
+        "scale-down" | "scaledown" => gtk::ContentFit::ScaleDown,
+        _ => gtk::ContentFit::Cover,
+    }
+}

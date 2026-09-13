@@ -1,9 +1,9 @@
-pub mod carousel;
 pub mod app;
+pub mod carousel;
 pub mod config;
-pub mod wallust;
 pub mod hypr;
-pub mod ui;
 pub mod keys;
 pub mod theme;
-
+pub mod ui;
+pub mod wallpaper;
+pub mod wallust;
