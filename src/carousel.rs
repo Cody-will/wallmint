@@ -4,16 +4,16 @@ use gtk::prelude::*;
 use std::{cell::RefCell, path::Path, fs, path::PathBuf, rc::Rc};
 use std::process::Command;
 use crate::app::load_css;
-use crate::config::load_theme;
+use crate::theme::load_theme;
 
 fn is_image(path: &Path) -> bool {
-    matches!(
+    return matches!(
         path.extension()
             .and_then(|e| e.to_str())
             .map(|s| s.to_ascii_lowercase())
             .as_deref(),
         Some("png") | Some("jpg") | Some("jpeg") | Some("webp") | Some("bmp")
-    )
+    );
 }
 
 pub fn load_images_from_folder(folder: impl AsRef<Path>) -> Vec<PathBuf> {
@@ -87,22 +87,29 @@ impl Carousel {
         self.preview.set_paintable(Some(&self.all[self.selected]));
     }
 
+ 
+
     pub fn set_paper(&self) {
         let path = std::fs::canonicalize(&self.selected_path)
             .unwrap_or_else(|_| self.selected_path.clone());
-        let path_str = path.to_string_lossy().to_string(); 
-        let wallpaper = format!("eDP-1,{}", path_str);
-        println!("{}", &path_str); 
+        let path_str = path.to_string_lossy(); 
+        let wallpaper_arg = format!("wallpaper,eDP-1,{}", path_str);
+        let preload_arg = format!("preload,{}", path_str);
+
+        println!("{}", path_str); 
+
+        // Send single comma-separated argument for preload
         let preload = Command::new("hyprctl")
-            .args(["hyprpaper", "preload", &path_str])
+            .args(["hyprpaper", &preload_arg])
             .output()
             .expect("failed to execute process");
 
         eprintln!("preload stdout: {}", String::from_utf8_lossy(&preload.stdout));
-        eprintln!("preload strerr: {}", String::from_utf8_lossy(&preload.stderr));
+        eprintln!("preload stderr: {}", String::from_utf8_lossy(&preload.stderr));
 
+        // Send single comma-separated argument for wallpaper
         let set = Command::new("hyprctl")
-            .args(["hyprpaper", "wallpaper", &wallpaper])
+            .args(["hyprpaper", &wallpaper_arg])
             .output()
             .expect("failed to execute process");
 
@@ -117,7 +124,7 @@ impl Carousel {
         eprintln!("colors: stdout: {}", String::from_utf8_lossy(&colors.stdout));
         eprintln!("colors: stderr: {}", String::from_utf8_lossy(&colors.stderr));
             
-        let theme = load_theme();
+        let theme = load_theme(&self);
         load_css(&theme);
     }
 }

@@ -1,6 +1,7 @@
 
+use crate::config::AppConfig;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct WallmintColors {
@@ -28,18 +29,45 @@ pub struct WallustFile {
     pub colors: WallmintColors,
 }
 
-pub fn load_wallust_colors() -> WallmintColors {
-    let path: PathBuf = dirs::cache_dir()
-        .expect("Could not find cache dir")
-        .join("wallust")
-        .join("wallmint.json");
+#[derive(Debug)]
+pub enum WallustError {
+    MissingPath,
+    Io { path: PathBuf, source: std::io::Error },
+    Json { path: PathBuf, source: serde_json::Error },
+}
 
-    let raw = std::fs::read_to_string(&path)
-        .expect("Failed to read wallmint.json");
+impl std::fmt::Display for WallustError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WallustError::MissingPath => write!(f, "No wallust_colors_json path set in config"),
+            WallustError::Io { path, source } => write!(f, "I/O error at {}: {}", path.display(), source),
+            WallustError::Json { path, source } => write!(f, "JSON error in {}: {}", path.display(), source),
+        }
+    }
+}
+impl std::error::Error for WallustError {}
 
-    let parsed: WallustFile =
-        serde_json::from_str(&raw).expect("Invalid JSON in wallmint.json");
+pub fn load_wallust_colors(cfg: &AppConfig) -> Result<WallmintColors, WallustError> {
+    let path = cfg
+        .paths
+        .wallust_colors_json
+        .clone()
+        .ok_or(WallustError::MissingPath)?;
 
-    parsed.colors
+    load_wallust_colors_from_path(&path)
+}
+
+pub fn load_wallust_colors_from_path(path: &Path) -> Result<WallmintColors, WallustError> {
+    let raw = std::fs::read_to_string(path).map_err(|e| WallustError::Io {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+
+    let parsed: WallustFile = serde_json::from_str(&raw).map_err(|e| WallustError::Json {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+
+    Ok(parsed.colors)
 }
 

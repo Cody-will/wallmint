@@ -3,45 +3,39 @@ use gtk::prelude::*;
 use gtk4_layer_shell::LayerShell;
 use crate::carousel::create_carousel;
 use crate::keys::register_carousel_keys;
+use crate::config::AppConfig;
+use std::sync::Arc;
 
-pub fn build_ui(app: &gtk::Application, _theme: &crate::config::WallmintTheme) {
+
+pub fn build_ui(app: &gtk::Application, cfg: Arc<AppConfig>) {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
-        .title("Wallmint")
-        .default_width(900)
-        .default_height(600)
+        .title(&cfg.ui.title)
+        .default_width(cfg.ui.window.width)
+        .default_height(cfg.ui.window.height)
         .build();
+
     window.init_layer_shell();
-
     window.set_layer(gtk4_layer_shell::Layer::Overlay);
-
-    window.set_anchor(gtk4_layer_shell::Edge::Left, false);
-    window.set_anchor(gtk4_layer_shell::Edge::Right, false);
-    window.set_anchor(gtk4_layer_shell::Edge::Top, false);
-    window.set_anchor(gtk4_layer_shell::Edge::Bottom, false);
-
     window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::OnDemand);
 
-    window.set_margin(gtk4_layer_shell::Edge::Top, 0);
-    window.set_margin(gtk4_layer_shell::Edge::Bottom, 0);
-    window.set_margin(gtk4_layer_shell::Edge::Left, 0);
-    window.set_margin(gtk4_layer_shell::Edge::Right, 0);
-    
     let root = gtk::Box::new(gtk::Orientation::Vertical, 8);
+
     let photo_box = create_photo_box();
-    
     root.append(&photo_box);
+
+    let imgs = crate::carousel::load_images_from_folder(&cfg.paths.wallpaper_dir);
+    let (carousel_widget, carousel_handle) = create_carousel(imgs);
+
+    root.append(&carousel_widget);
+
     window.set_child(Some(&root));
 
-    let img = crate::carousel::load_images_from_folder("/home/cody/Pictures/walls");
-    let (carousel_widget, carousel_handle) = create_carousel(img);
-
-    window.set_child(Some(&carousel_widget));
     register_carousel_keys(app, &window, carousel_handle);
-    
 
     window.present();
 }
+
 
 
 
